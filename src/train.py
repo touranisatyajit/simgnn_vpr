@@ -67,8 +67,33 @@ class GetDataset(Dataset):
 train_dataset = GetDataset(csv_file='/home/tourani/Desktop/code/simgnn_vpr/data/train.csv', root_dir='/home/tourani/Desktop/code/simgnn_vpr/data/', transform=transform)
 test_dataset = GetDataset(csv_file='/home/tourani/Desktop/code/simgnn_vpr/data/test.csv', root_dir='/home/tourani/Desktop/code/simgnn_vpr/data/', transform=transform)
 dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=2)
-test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=True, num_workers=2)
+test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=True, num_workers=2)
 
+def validate(net):
+    
+    net.eval()
+    validation_dataloader = test_dataloader
+    total = 0
+    correct = 0
+    for i, data in enumerate(validation_dataloader, 0):
+        total = total + 1
+        for z in range(1):
+            im_1 = Variable(data[0][z]).cuda()
+            im_2 = Variable(data[1][z]).cuda()
+            im_3 = Variable(data[2][z]).cuda()
+            im_4 = Variable(data[3][z]).cuda()
+            im_5 = Variable(data[4][z]).cuda()
+            im_6 = Variable(data[5][z]).cuda()
+            cur_lab = Variable(data[6][z]).cuda()
+            pred_label = net(im_1, im_2, im_3, im_4, im_5, im_6)
+            pred_label = pred_label[0][0]
+            #print(pred_label[0][0].shape, cur_lab.shape)
+            if(pred_label > 0.5):
+                pred_label = 1
+            else:
+                pred_label = 0
+            correct = correct + (pred_label == cur_lab)
+    print(correct, total)
 
 def trainNet(net, batch_size, n_epochs, learning_rate):
     
@@ -80,7 +105,8 @@ def trainNet(net, batch_size, n_epochs, learning_rate):
     
     train_loader = dataloader
     n_batches = len(train_loader)
-    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate,lr=0.001,
+                                          weight_decay=5*10**-4)
     print('Beginning training\n')
     for epoch in range(n_epochs):
         net.train()
@@ -113,6 +139,9 @@ def trainNet(net, batch_size, n_epochs, learning_rate):
             optimizer.step()
             running_loss = running_loss + losses
         print('Epoch: ', epoch, 'Loss: ', running_loss)
+        if(epoch % 10 == 0):
+            validate(net)
+        
 args = parameter_parser()
 model_to_train = SimGNN(args,3).cuda()
 for name, param in model_to_train.named_parameters():
@@ -123,4 +152,5 @@ for name, param in model_to_train.named_parameters():
 for name, param in model_to_train.named_parameters():
     if param.requires_grad:
         print(name) 
-trainNet(model_to_train, batch_size=4, n_epochs=32000, learning_rate=0.0001)
+#trainNet(model_to_train, batch_size=4, n_epochs=32000, learning_rate=0.0001)
+validate(model_to_train)
